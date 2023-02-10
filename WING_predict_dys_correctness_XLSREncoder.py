@@ -19,7 +19,6 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 
-
 def compute_feats(wavs,fs):
         """Feature computation pipeline"""
         resample_rate = 16000
@@ -198,13 +197,14 @@ def train_model(model,train_data,optimizer,criterion):
 
 
 
-def save_model(model,opt,epoch,val_loss):
+def save_model(model,opt,epoch,args,val_loss):
     today = datetime.date.today()
-    p = "save/%s"%sys.argv[0].strip(".py")
+    date = today.strftime("%H-%M-%d-%b-%Y")
+
+    p = "save/%s_%s_%s_%s"%(args.model,args.correctness_type,date,args.seed)
     if not os.path.exists(p):
         os.mkdir(p)
-    date = today.strftime("%H-%M-%d-%b-%Y")
-    m_name = "%s-%s-%s"%(sys.argv[0].strip(".py"),SEED,date)
+    m_name = "%s-%s-%s"%(args.model,args.seed,date)
     torch.save(model.state_dict(),"%s/%s_%s_%s_model.pt"%(p,m_name,epoch,val_loss))
     torch.save(opt.state_dict(),"%s/%s_%s_%s_opt.pt"%(p,m_name,epoch,val_loss))
 
@@ -217,7 +217,7 @@ def find_length(wav_path):
 def main(args):
 
     # Load the  data
-    df_intel = pd.read_json(args.intel_file_json)
+    df_intel = pd.read_json(args.in_json_file)
     data = df_intel.T
     data["predicted"] = np.nan  # Add column to store intel predictions
     data["wav_path"] = data.index
@@ -242,9 +242,9 @@ def main(args):
         cer.append(jiwer.cer(w,t))
 
     #create the correctness column
-    if args.correctness_type == "wer":
+    if args.correctness_type == "CER":
         data["correctness"] = 1-np.array(wer)
-    elif args.correctness_type == "cer":
+    elif args.correctness_type == "WER":
         data["correctness"] = 1-np.array(cer)
     else:
         print("Correctness type not recognised")
@@ -278,37 +278,44 @@ def main(args):
     #train_data = train_data[:50]
     
     #set up the torch objects
+    print("creating model...")
     torch.manual_seed(args.seed)
+    print(args.model)
 
+    
     if args.model == "XLSREncoder":
         from models.ni_predictors import XLSRMetricPredictorEncoder
-        model = XLSRMetricPredictorEncoder()
+        model = XLSRMetricPredictorEncoder().to("cuda:0")
     elif args.model == "XLSRFull":
         from models.ni_predictors import XLSRMetricPredictorFull
-        model = XLSRMetricPredictorFull()
+        model = XLSRMetricPredictorFull().to("cuda:0")
     elif args.model == "HuBERTEncoder":
         from models.ni_predictors import HuBERTMetricPredictorEncoder
-        model = HuBERTMetricPredictorEncoder()
+        model = HuBERTMetricPredictorEncoder().to("cuda:0")
     elif args.model == "HuBERTFull":
         from models.ni_predictors import HuBERTMetricPredictorFull
-        model = HuBERTMetricPredictorFull()
+        model = HuBERTMetricPredictorFull().to("cuda:0")
     elif args.model == "Spec":
         from models.ni_predictors import SpecMetricPredictor
-        model = SpecMetricPredictor()
+        model = SpecMetricPredictor().to("cuda:0")
+    
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
-    model = model.to("cuda:0")
     #print the model summary
-    torchinfo.summary(model,(1,16000*5))
+    torchinfo.summary(model)
     #train the model
-    for epoch in range(args.epochs):
+    print("-----------------")
+    print("Starting training of model: %s\nobjective: %s\nlearning rate: %s\nseed: %s\nepochs %s"%(args.model,args.correctness_type,args.lr,args.seed,args.n_epochs))
+    print("-----------------")
+
+    for epoch in range(args.n_epochs):
         print("Epoch: %s"%(epoch))
         model,optimizer,criterion = train_model(model,train_data,optimizer,criterion)
         
 
         #get predictions for the val set 
         predictions,val_loss = test_model(model,val_data,optimizer,criterion)
-        save_model(model,optimizer,epoch,val_loss)
+        save_model(model,optimizer,epoch,args,val_loss)
     
         print("-----------------")
     
@@ -334,22 +341,26 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "cpc1_train_json_file", help="JSON file containing the CPC1 training metadata"
+        "in_json_file", help="JSON file containing the metadata of the dataset"
     )
     parser.add_argument(
-        "out_csv_file", help="output csv file containing the intelligibility predictions"
+        "out_csv_file", help="output csv file containing the correctness predictions"
     )
     parser.add_argument(
-        "correctness_type", help="correctness type: WER or CER", default="CER"
+        "--correctness_type", help="correctness type: WER or CER", default="CER",required=False
     )
     parser.add_argument(
-        "n_epochs", help="number of epochs", default=30, type=int
+        "--n_epochs", help="number of epochs", default=30, type=int
     )
     parser.add_argument(
-        "lr", help="learning rate", default=0.001, type=float
+        "--lr", help="learning rate", default=0.001, type=float
     )
     parser.add_argument(
-        "model_type", help="model type" , default="XLSREncoder",
+        "--model", help="model type" , default="XLSREncoder",
+    )
+    parser.add_argument(
+        "--seed", help="torch seed" , default=1234,
     )
     args = parser.parse_args()
+    print(args)
     main(args)
