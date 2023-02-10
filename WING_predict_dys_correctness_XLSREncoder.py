@@ -198,13 +198,10 @@ def train_model(model,train_data,optimizer,criterion):
 
 
 def save_model(model,opt,epoch,args,val_loss):
-    today = datetime.date.today()
-    date = today.strftime("%H-%M-%d-%b-%Y")
-
-    p = "save/%s_%s_%s_%s"%(args.model,args.correctness_type,date,args.seed)
+    p = args.model_dir
     if not os.path.exists(p):
         os.mkdir(p)
-    m_name = "%s-%s-%s"%(args.model,args.seed,date)
+    m_name = "%s-%s"%(args.model,args.seed)
     torch.save(model.state_dict(),"%s/%s_%s_%s_model.pt"%(p,m_name,epoch,val_loss))
     torch.save(opt.state_dict(),"%s/%s_%s_%s_opt.pt"%(p,m_name,epoch,val_loss))
 
@@ -299,15 +296,22 @@ def main(args):
         from models.ni_predictors import SpecMetricPredictor
         model = SpecMetricPredictor().to("cuda:0")
     
+    #set save location:
+    today = datetime.date.today()
+    date = today.strftime("%H-%M-%d-%b-%Y")
+
+    model_dir = "save/%s_%s_%s_%s"%(args.model,args.correctness_type,date,args.seed)
+    args.model_dir = model_dir
+
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
     #print the model summary
     torchinfo.summary(model)
     #train the model
     print("-----------------")
-    print("Starting training of model: %s\nobjective: %s\nlearning rate: %s\nseed: %s\nepochs %s"%(args.model,args.correctness_type,args.lr,args.seed,args.n_epochs))
+    print("Starting training of model: %s\nobjective: %s\nlearning rate: %s\nseed: %s\nepochs %s\nsave location: %s/"%(args.model,args.correctness_type,args.lr,args.seed,args.n_epochs,args.model_dir))
     print("-----------------")
-
+    
     for epoch in range(args.n_epochs):
         print("Epoch: %s"%(epoch))
         model,optimizer,criterion = train_model(model,train_data,optimizer,criterion)
@@ -320,7 +324,7 @@ def main(args):
         print("-----------------")
     
     #load the model with the lowest validation loss
-    model_dir = "save/%s"%sys.argv[0].strip(".py")
+    
     print(model_dir)
     model_files = os.listdir(model_dir)
 
@@ -336,7 +340,7 @@ def main(args):
 
     print(test_data[["correctness", "predicted"]])
     print(test_data["correctness"].corr(test_data["predicted"]))
-    test_data[["wav_path","correctness", "predicted"]].to_csv(args.prediction_file_csv, index=False)
+    test_data[["wav_path","correctness", "predicted"]].to_csv(args.out_csv_file, index=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
