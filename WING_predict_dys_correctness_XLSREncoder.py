@@ -292,6 +292,9 @@ def main(args):
     elif args.model == "HuBERTFull":
         from models.ni_predictors import HuBERTMetricPredictorFull
         model = HuBERTMetricPredictorFull()
+    elif args.model == "Spec":
+        from models.ni_predictors import SpecMetricPredictor
+        model = SpecMetricPredictor()
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
     model = model.to("cuda:0")
