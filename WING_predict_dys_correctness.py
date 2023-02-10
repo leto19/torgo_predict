@@ -9,9 +9,7 @@ import speechbrain as sb
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import os
-import sys
 import datetime
-import torchaudio.transforms as T
 import torchinfo
 #word error rate
 import jiwer
@@ -228,7 +226,7 @@ def main(args):
     data["length"] = data["wav_path"].apply(lambda x: find_length(x))
 
     # filter out the utterances with only one word
-    if args.filter_single_word:
+    if args.remove_one_word:
         data = data[data["word_count"] > 1]
     # filter out the utterances with length > 10 seconds
     data = data[data["length"] < 10]
@@ -276,11 +274,8 @@ def main(args):
     #train_data = train_data[:50]
     
     #set up the torch objects
-    print("creating model...")
+    print("creating model: %s"%args.model)
     torch.manual_seed(args.seed)
-    print(args.model)
-
-    
     if args.model == "XLSREncoder":
         from models.ni_predictors import XLSRMetricPredictorEncoder
         model = XLSRMetricPredictorEncoder().to("cuda:0")
